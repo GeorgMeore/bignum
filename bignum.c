@@ -1,8 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
-
-#define SWAP(x, y) ({typeof(x) tmp = y; y = x; x = tmp;})
 
 #define DEFAULTCAP 16
 
@@ -18,7 +17,7 @@ Number number(unsigned long n)
 	Number a;
 	a.len = 1;
 	a.cap = DEFAULTCAP;
-	a.d = calloc(a.cap, sizeof(unsigned long));
+	a.d = calloc(a.cap, sizeof(a.d[0]));
 	a.d[0] = n; /* all others are zeroed by calloc */
 	return a;
 }
@@ -28,9 +27,10 @@ Number copy(Number n)
 	Number c;
 	c.len = n.len;
 	c.cap = n.cap;
-	c.d = calloc(c.cap, sizeof(unsigned long));
-	for (int i = 0; i < c.cap; i++)
+	c.d = calloc(c.cap, sizeof(c.d[0]));
+	for (int i = 0; i < c.len; i++)
 		c.d[i] = n.d[i];
+	c.neg = n.neg;
 	return c;
 }
 
@@ -43,6 +43,14 @@ void destroy(Number n)
 void neg(Number *n)
 {
 	n->neg = !n->neg;
+}
+
+void zero(Number *n)
+{
+	n->neg = 0;
+	for (int i = 0; i < n->len; i++)
+		n->d[i] = 0;
+	n->len = 1;
 }
 
 int iszero(Number n)
@@ -73,7 +81,7 @@ static void extend(Number *n, int chunks)
 		return;
 	while (n->len > n->cap)
 		n->cap *= 2;
-	n->d = reallocarray(n->d, n->cap, sizeof(unsigned long));
+	n->d = reallocarray(n->d, n->cap, sizeof(n->d[0]));
 	for (int j = n->len - chunks; j < n->cap; j++)
 		n->d[j] = 0;
 }
@@ -85,15 +93,15 @@ static void absadd(Number *dst, Number src)
 	int carry = 0;
 	for (int i = 0; i < src.len; i++) {
 		dst->d[i] += src.d[i] + carry;
-		carry = dst->d[i] < src.d[i];
+		carry = (carry && !(src.d[i] + carry)) || dst->d[i] < src.d[i] + carry;
+	}
+	for (int i = src.len; i < dst->len && carry; i++) {
+		dst->d[i] += carry;
+		carry = !dst->d[i];
 	}
 	if (carry) {
-		if (dst->len > src.len) {
-			dst->d[src.len] += 1;
-		} else {
-			extend(dst, 1);
-			dst->d[src.len] = 1;
-		}
+		extend(dst, 1);
+		dst->d[dst->len-1] = 1;
 	}
 }
 
@@ -103,29 +111,30 @@ static void shrink(Number *n)
 		n->len -= 1;
 }
 
+static void flip(Number *n)
+{
+	for (int i = 0; i < n->len; i++)
+		n->d[i] = ~n->d[i];
+	n->d[0] += 1;
+}
+
 void abssub(Number *dst, Number src)
 {
-	Number m = *dst, s = src;
-	if (abscmp(m, s) == -1) {
-		neg(dst);
-		SWAP(m, s);
-	}
-	if (dst->len < m.len)
-		extend(dst, m.len - dst->len);
+	if (dst->len < src.len)
+		extend(dst, src.len - dst->len);
 	int borrow = 0;
-	for (int i = 0; i < s.len; i++) {
-		if (m.d[i] < s.d[i] || (borrow && m.d[i] == s.d[i])) {
-			dst->d[i] = m.d[i] + ~s.d[i] + 1 - borrow;
-			borrow = 1;
-		} else {
-			dst->d[i] = m.d[i] - s.d[i] - borrow;
-			borrow = 0;
-		}
+	for (int i = 0; i < src.len; i++) {
+		dst->d[i] -= src.d[i] + borrow;
+		borrow = (borrow && !(src.d[i] + borrow)) || dst->d[i] > ~(src.d[i] + borrow);
 	}
-	for (int i = s.len; i < m.len; i++)
-		dst->d[i] = m.d[i];
-	if (borrow)
-		dst->d[s.len] -= 1;
+	for (int i = src.len; i < dst->len && borrow; i++) {
+		dst->d[i] -= borrow;
+		borrow = !~dst->d[i];
+	}
+	if (borrow) {
+		neg(dst);
+		flip(dst);
+	}
 	shrink(dst);
 }
 
@@ -160,11 +169,34 @@ void sub(Number *dst, Number src)
 	add(dst, src);
 }
 
-Number sum(Number a, Number b)
+void read(Number *n, char *s)
 {
-	Number c = copy(a);
-	add(&c, b);
-	return c;
+	zero(n);
+	if (*s == '-') {
+		n->neg = 1;
+		s++;
+	}
+	int perchunk = (sizeof(n->d[0]) * 2);
+	int len = strlen(s);
+	int last = len / perchunk;
+	if (last >= n->len)
+		extend(n, last + 1 - n->len);
+	for (int i = 0; i < len; i++) {
+		char c = s[len-1-i];
+		unsigned long digit;
+		if (c >= '0' && c <= '9') {
+			digit = c - '0';
+		} else if ((c|32) >= 'a' && (c|32) <= 'f') {
+			digit = (c|32) - 'a' + 10;
+		} else {
+			printf("error: not a hex digit: %c\n", c);
+			return;
+		}
+		int chunk = i / perchunk;
+		int shift = i % perchunk;
+		n->d[chunk] += digit << (shift * 4);
+	}
+	shrink(n);
 }
 
 void print(Number n)
@@ -178,16 +210,17 @@ void print(Number n)
 
 int main(int, char **)
 {
-	Number a = number(0xFFFFFFFFFFFFFFFF);
-	Number b = number(0xFFFFFFFFFFFFFFFF);
+	Number a = number(0);
+	Number b = number(0x123450000ffff);
 	Number z = number(0x0);
+	read(&a, "123456789abcdefedcba9876543210");
 	print(a);
 	neg(&a);
 	print(a);
-	for (int i = 0; i < 1000; i++)
+	for (int i = 0; i < 100000; i++)
 		add(&a, b);
 	print(a);
-	for (int i = 0; i < 1000; i++)
+	for (int i = 0; i < 100000; i++)
 		sub(&a, b);
 	print(a);
 	sub(&a, a);
