@@ -172,7 +172,7 @@ void sub(Number *dst, Number src)
 	add(dst, src);
 }
 
-static void rshift(Number *n, uint bits)
+void rshift(Number *n, uint bits)
 {
 	uint perchunk = sizeof(n->d[0])*8;
 	uint drop = bits / perchunk;
@@ -181,7 +181,7 @@ static void rshift(Number *n, uint bits)
 		return;
 	}
 	if (drop) {
-		for (uint i = 0; i < n->len - drop; i++) {
+		for (uint i = 0; i < n->len-drop; i++) {
 			n->d[i] = n->d[i+drop];
 			n->d[i+drop] = 0;
 		}
@@ -189,11 +189,10 @@ static void rshift(Number *n, uint bits)
 	uint shift = bits % perchunk;
 	if (shift) {
 		ulong mask  = (1UL << shift) - 1;
-		ulong carry = 0;
-		for (ulong i = n->len; ~i; i--) {
-			ulong newcarry = (n->d[i] & mask) << (perchunk - shift);
-			n->d[i] = (n->d[i] >> shift) | carry;
-			carry = newcarry;
+		n->d[0] >>= shift;
+		for (uint i = 0; i < n->len-drop-1; i++) {
+			n->d[i] |= (n->d[i+1] & mask) << (perchunk - shift);
+			n->d[i+1] >>= shift;
 		}
 	}
 	shrink(n);
