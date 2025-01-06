@@ -3,20 +3,22 @@
 #include <string.h>
 #include <assert.h>
 
-#define DEFAULTCAP 16
+typedef unsigned char uchar;
+typedef unsigned int uint;
+typedef unsigned long ulong;
 
 typedef struct {
-	int len;
-	int cap;
-	unsigned long *d;
-	int neg;
+	uint len;
+	uint cap;
+	ulong *d;
+	uchar neg;
 } Number;
 
-Number number(unsigned long n)
+Number number(ulong n)
 {
 	Number a;
 	a.len = 1;
-	a.cap = DEFAULTCAP;
+	a.cap = 16; /* the default initial capacity */
 	a.d = calloc(a.cap, sizeof(a.d[0]));
 	a.d[0] = n; /* all others are zeroed by calloc */
 	return a;
@@ -28,7 +30,7 @@ Number copy(Number n)
 	c.len = n.len;
 	c.cap = n.cap;
 	c.d = calloc(c.cap, sizeof(c.d[0]));
-	for (int i = 0; i < c.len; i++)
+	for (uint i = 0; i < c.len; i++)
 		c.d[i] = n.d[i];
 	c.neg = n.neg;
 	return c;
@@ -50,7 +52,7 @@ void neg(Number *n)
 void zero(Number *n)
 {
 	n->neg = 0;
-	for (int i = 0; i < n->len; i++)
+	for (uint i = 0; i < n->len; i++)
 		n->d[i] = 0;
 	n->len = 1;
 }
@@ -60,17 +62,16 @@ int iszero(Number n)
 	return !n.len || (n.len == 1 && n.d[0] == 0);
 }
 
-static void extend(Number *n, int chunks)
+static void extend(Number *n, uint chunks)
 {
-	assert(chunks > 0);
 	n->len += chunks;
 	if (n->len <= n->cap)
 		return;
 	while (n->len > n->cap)
 		n->cap = n->len * 2;
 	n->d = reallocarray(n->d, n->cap, sizeof(n->d[0]));
-	for (int j = n->len - chunks; j < n->cap; j++)
-		n->d[j] = 0;
+	for (uint i = n->len - chunks; i < n->cap; i++)
+		n->d[i] = 0;
 }
 
 static void absadd(Number *dst, Number src)
@@ -78,11 +79,11 @@ static void absadd(Number *dst, Number src)
 	if (dst->len < src.len)
 		extend(dst, src.len - dst->len);
 	int carry = 0;
-	for (int i = 0; i < src.len; i++) {
+	for (uint i = 0; i < src.len; i++) {
 		dst->d[i] += src.d[i] + carry;
 		carry = (carry && !(src.d[i] + carry)) || dst->d[i] < src.d[i] + carry;
 	}
-	for (int i = src.len; i < dst->len && carry; i++) {
+	for (uint i = src.len; i < dst->len && carry; i++) {
 		dst->d[i] += carry;
 		carry = !dst->d[i];
 	}
@@ -100,7 +101,7 @@ static void shrink(Number *n)
 
 static void flip(Number *n)
 {
-	for (int i = 0; i < n->len; i++)
+	for (uint i = 0; i < n->len; i++)
 		n->d[i] = ~n->d[i];
 	n->d[0] += 1;
 }
@@ -110,11 +111,11 @@ void abssub(Number *dst, Number src)
 	if (dst->len < src.len)
 		extend(dst, src.len - dst->len);
 	int borrow = 0;
-	for (int i = 0; i < src.len; i++) {
+	for (uint i = 0; i < src.len; i++) {
 		dst->d[i] -= src.d[i] + borrow;
 		borrow = (borrow && !(src.d[i] + borrow)) || dst->d[i] > ~(src.d[i] + borrow);
 	}
-	for (int i = src.len; i < dst->len && borrow; i++) {
+	for (uint i = src.len; i < dst->len && borrow; i++) {
 		dst->d[i] -= borrow;
 		borrow = !~dst->d[i];
 	}
@@ -171,6 +172,33 @@ void sub(Number *dst, Number src)
 	add(dst, src);
 }
 
+static void rshift(Number *n, uint bits)
+{
+	uint perchunk = sizeof(n->d[0])*8;
+	uint drop = bits / perchunk;
+	if (drop >= n->len) {
+		zero(n);
+		return;
+	}
+	if (drop) {
+		for (uint i = 0; i < n->len - drop; i++) {
+			n->d[i] = n->d[i+drop];
+			n->d[i+drop] = 0;
+		}
+	}
+	uint shift = bits % perchunk;
+	if (shift) {
+		ulong mask  = (1UL << shift) - 1;
+		ulong carry = 0;
+		for (ulong i = n->len; ~i; i--) {
+			ulong newcarry = (n->d[i] & mask) << (perchunk - shift);
+			n->d[i] = (n->d[i] >> shift) | carry;
+			carry = newcarry;
+		}
+	}
+	shrink(n);
+}
+
 void read(Number *n, char *s)
 {
 	zero(n);
@@ -178,14 +206,14 @@ void read(Number *n, char *s)
 		n->neg = 1;
 		s++;
 	}
-	int perchunk = (sizeof(n->d[0]) * 2);
-	int len = strlen(s);
-	int last = len / perchunk;
+	uint perchunk = (sizeof(n->d[0]) * 2);
+	uint len = strlen(s);
+	uint last = len / perchunk;
 	if (last >= n->len)
 		extend(n, last + 1 - n->len);
-	for (int i = 0; i < len; i++) {
+	for (uint i = 0; i < len; i++) {
 		char c = s[len-1-i];
-		unsigned long digit;
+		ulong digit;
 		if (c >= '0' && c <= '9') {
 			digit = c - '0';
 		} else if ((c|32) >= 'a' && (c|32) <= 'f') {
@@ -205,17 +233,29 @@ void print(Number n)
 {
 	if (n.neg && !iszero(n))
 		printf("-");
+	printf("0x");
 	for (int i = n.len - 1; i >= 0; i--)
 		printf("%lx", n.d[i]);
 	printf("\n");
 }
 
-int main(int, char **)
+int main(void)
 {
 	Number a = number(0);
-	Number b = number(0x123450000ffff);
-	Number z = number(0x0);
 	read(&a, "123456789abcdefedcba9876543210");
+	rshift(&a, 73);
+	print(a);
+	clear(&a);
+	return 0;
+}
+
+int main2(int, char **)
+{
+	Number a = number(0);
+	Number b = number(0);
+	Number z = number(0);
+	read(&a, "123456789abcdefedcba9876543210");
+	read(&b, "912374198327491832749817348971298374981273498719283749817234987129384791234981237498123749875192357192381423");
 	print(a);
 	neg(&a);
 	print(a);
