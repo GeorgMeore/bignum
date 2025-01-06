@@ -34,10 +34,12 @@ Number copy(Number n)
 	return c;
 }
 
-void destroy(Number n)
+void clear(Number *n)
 {
-	free(n.d);
-	n.d = 0;
+	free(n->d);
+	n->cap = 0;
+	n->len = 0;
+	n->d = 0;
 }
 
 void neg(Number *n)
@@ -55,22 +57,7 @@ void zero(Number *n)
 
 int iszero(Number n)
 {
-	return n.len == 1 && n.d[0] == 0;
-}
-
-static int abscmp(Number a, Number b)
-{
-	if (a.len > b.len)
-		return 1;
-	if (a.len < b.len)
-		return -1;
-	for (int i = a.len - 1; i >= 0; i--) {
-		if (a.d[i] > b.d[i])
-			return 1;
-		if (a.d[i] < b.d[i])
-			return -1;
-	}
-	return 0;
+	return !n.len || (n.len == 1 && n.d[0] == 0);
 }
 
 static void extend(Number *n, int chunks)
@@ -80,7 +67,7 @@ static void extend(Number *n, int chunks)
 	if (n->len <= n->cap)
 		return;
 	while (n->len > n->cap)
-		n->cap *= 2;
+		n->cap = n->len * 2;
 	n->d = reallocarray(n->d, n->cap, sizeof(n->d[0]));
 	for (int j = n->len - chunks; j < n->cap; j++)
 		n->d[j] = 0;
@@ -136,6 +123,21 @@ void abssub(Number *dst, Number src)
 		flip(dst);
 	}
 	shrink(dst);
+}
+
+static int abscmp(Number a, Number b)
+{
+	if (a.len > b.len)
+		return 1;
+	if (a.len < b.len)
+		return -1;
+	for (int i = a.len - 1; i >= 0; i--) {
+		if (a.d[i] > b.d[i])
+			return 1;
+		if (a.d[i] < b.d[i])
+			return -1;
+	}
+	return 0;
 }
 
 int cmp(Number a, Number b)
@@ -229,8 +231,11 @@ int main(int, char **)
 	print(a);
 	add(&a, z);
 	print(a);
-	destroy(a);
-	destroy(b);
-	destroy(z);
+	clear(&a);
+	add(&a, b);
+	print(a);
+	clear(&a);
+	clear(&b);
+	clear(&z);
 	return 0;
 }
