@@ -188,7 +188,7 @@ void rshift(Number *n, uint bits)
 	}
 	uint shift = bits % perchunk;
 	if (shift) {
-		ulong mask  = (1UL << shift) - 1;
+		ulong mask = (1UL << shift) - 1;
 		n->d[0] >>= shift;
 		for (uint i = 0; i < n->len-drop-1; i++) {
 			n->d[i] |= (n->d[i+1] & mask) << (perchunk - shift);
@@ -198,6 +198,31 @@ void rshift(Number *n, uint bits)
 	shrink(n);
 }
 
+void lshift(Number *n, uint bits)
+{
+	uint perchunk = sizeof(n->d[0])*8;
+	uint move = bits / perchunk;
+	if (move) {
+		extend(n, move);
+		for (uint i = 0; i < n->len-move; i++) {
+			n->d[n->len-1-i] = n->d[n->len-1-i - move];
+			n->d[n->len-1-i - move] = 0;
+		}
+	}
+	uint shift = bits % perchunk;
+	if (shift) {
+		ulong mask = ((1UL << shift) - 1) << (perchunk - shift);
+		if (n->d[n->len-1] & mask)
+			extend(n, 1);
+		else
+			n->d[n->len-1] <<= shift;
+		for (uint i = 0; i < n->len-move-1; i++) {
+			n->d[n->len-i-1] |= (n->d[n->len-i-2] & mask) >> (perchunk - shift);
+			n->d[n->len-i-2] <<= shift;
+		}
+	}
+}
+
 void read(Number *n, char *s)
 {
 	zero(n);
@@ -205,13 +230,13 @@ void read(Number *n, char *s)
 		n->neg = 1;
 		s++;
 	}
-	uint perchunk = (sizeof(n->d[0]) * 2);
-	uint len = strlen(s);
-	uint last = len / perchunk;
+	uint perchunk = sizeof(n->d[0]) * 2;
+	uint slen = strlen(s);
+	uint last = (slen + perchunk - 1) / perchunk;
 	if (last >= n->len)
 		extend(n, last + 1 - n->len);
-	for (uint i = 0; i < len; i++) {
-		char c = s[len-1-i];
+	for (uint i = 0; i < slen; i++) {
+		char c = s[slen-1-i];
 		ulong digit;
 		if (c >= '0' && c <= '9') {
 			digit = c - '0';
@@ -232,9 +257,9 @@ void print(Number n)
 {
 	if (n.neg && !iszero(n))
 		printf("-");
-	printf("0x");
-	for (int i = n.len - 1; i >= 0; i--)
-		printf("%lx", n.d[i]);
+	printf("0x%lx", n.d[n.len-1]);
+	for (uint i = 1; i < n.len; i++)
+		printf("%016lx", n.d[n.len-1-i]);
 	printf("\n");
 }
 
@@ -242,7 +267,9 @@ int main(void)
 {
 	Number a = number(0);
 	read(&a, "123456789abcdefedcba9876543210");
-	rshift(&a, 73);
+	lshift(&a, 113);
+	print(a);
+	rshift(&a, 99);
 	print(a);
 	clear(&a);
 	return 0;
