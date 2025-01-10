@@ -14,9 +14,11 @@ typedef struct {
 	uchar neg;
 } Number;
 
+#define CHUNKBITS (sizeof(long)*8)
+
 Number number(ulong n)
 {
-	Number a;
+	Number a = {};
 	a.len = 1;
 	a.cap = 16; /* the default initial capacity */
 	a.d = calloc(a.cap, sizeof(a.d[0]));
@@ -26,7 +28,7 @@ Number number(ulong n)
 
 Number copy(Number n)
 {
-	Number c;
+	Number c = {};
 	c.len = n.len;
 	c.cap = n.cap;
 	c.d = calloc(c.cap, sizeof(c.d[0]));
@@ -44,17 +46,19 @@ void clear(Number *n)
 	n->d = 0;
 }
 
-void neg(Number *n)
+void negate(Number *n)
 {
 	n->neg = !n->neg;
 }
 
 void zero(Number *n)
 {
+	if (n->len) {
+		for (uint i = 0; i < n->len; i++)
+			n->d[i] = 0;
+		n->len = 1;
+	}
 	n->neg = 0;
-	for (uint i = 0; i < n->len; i++)
-		n->d[i] = 0;
-	n->len = 1;
 }
 
 int iszero(Number n)
@@ -120,7 +124,7 @@ void abssub(Number *dst, Number src)
 		borrow = !~dst->d[i];
 	}
 	if (borrow) {
-		neg(dst);
+		negate(dst);
 		flip(dst);
 	}
 	shrink(dst);
@@ -168,14 +172,15 @@ void add(Number *dst, Number src)
 
 void sub(Number *dst, Number src)
 {
-	neg(&src);
+	negate(&src);
 	add(dst, src);
 }
 
 void rshift(Number *n, uint bits)
 {
-	uint perchunk = sizeof(n->d[0])*8;
-	uint drop = bits / perchunk;
+	if (iszero(*n))
+		return;
+	uint drop = bits / CHUNKBITS;
 	if (drop >= n->len) {
 		zero(n);
 		return;
@@ -186,12 +191,12 @@ void rshift(Number *n, uint bits)
 			n->d[i+drop] = 0;
 		}
 	}
-	uint shift = bits % perchunk;
+	uint shift = bits % CHUNKBITS;
 	if (shift) {
 		ulong mask = (1UL << shift) - 1;
 		n->d[0] >>= shift;
 		for (uint i = 0; i < n->len-drop-1; i++) {
-			n->d[i] |= (n->d[i+1] & mask) << (perchunk - shift);
+			n->d[i] |= (n->d[i+1] & mask) << (CHUNKBITS - shift);
 			n->d[i+1] >>= shift;
 		}
 	}
@@ -200,8 +205,9 @@ void rshift(Number *n, uint bits)
 
 void lshift(Number *n, uint bits)
 {
-	uint perchunk = sizeof(n->d[0])*8;
-	uint move = bits / perchunk;
+	if (iszero(*n))
+		return;
+	uint move = bits / CHUNKBITS;
 	if (move) {
 		extend(n, move);
 		for (uint i = 0; i < n->len-move; i++) {
@@ -209,18 +215,108 @@ void lshift(Number *n, uint bits)
 			n->d[n->len-1-i - move] = 0;
 		}
 	}
-	uint shift = bits % perchunk;
+	uint shift = bits % CHUNKBITS;
 	if (shift) {
-		ulong mask = ((1UL << shift) - 1) << (perchunk - shift);
+		ulong mask = ((1UL << shift) - 1) << (CHUNKBITS - shift);
 		if (n->d[n->len-1] & mask)
 			extend(n, 1);
 		else
 			n->d[n->len-1] <<= shift;
 		for (uint i = 0; i < n->len-move-1; i++) {
-			n->d[n->len-i-1] |= (n->d[n->len-i-2] & mask) >> (perchunk - shift);
+			n->d[n->len-i-1] |= (n->d[n->len-i-2] & mask) >> (CHUNKBITS - shift);
 			n->d[n->len-i-2] <<= shift;
 		}
 	}
+}
+
+ulong length(Number n)
+{
+	if (n.len) {
+		for (uint i = CHUNKBITS; i; i--) {
+			if (n.d[n.len-1] & (1UL << (i-1)))
+				return (ulong)(n.len - 1)*CHUNKBITS + i;
+		}
+	}
+	return 0;
+}
+
+void inc(Number *dst, ulong n)
+{
+	Number c = {1, 1, (ulong[]){n}, 0};
+	add(dst, c);
+}
+
+void dec(Number *dst, ulong n)
+{
+	Number c = {1, 1, (ulong[]){n}, 0};
+	sub(dst, c);
+}
+
+void mul(Number *dst, Number src)
+{
+	if (iszero(src)) {
+		zero(dst);
+		return;
+	}
+	dst->neg = dst->neg ^ src.neg;
+	Number tmp = copy(*dst);
+	uint srccopy = dst->d == src.d;
+	if (srccopy)
+		src = copy(src);
+	zero(dst);
+	for (ulong i = 0; i < length(src); i++) {
+		if (src.d[i/CHUNKBITS] & (1UL << i%CHUNKBITS))
+			absadd(dst, tmp);
+		lshift(&tmp, 1);
+	}
+	clear(&tmp);
+	if (srccopy)
+		clear(&src);
+}
+
+void move(Number *dst, Number *src)
+{
+	if (dst->d == src->d)
+		return;
+	free(dst->d);
+	*dst = *src;
+	src->len = 0;
+	src->cap = 0;
+	src->d = 0;
+}
+
+void divrem(Number *dst, Number *rem, Number src)
+{
+	if (iszero(src))
+		return; /* should we crash? */
+	ulong dstlen = length(*dst);
+	ulong srclen = length(src);
+	if (dstlen < srclen) {
+		if (rem)
+			move(rem, dst);
+		else
+			zero(dst);
+		return;
+	}
+	Number d = copy(src);
+	Number r = copy(*dst);
+	dst->neg = r.neg = dst->neg ^ src.neg;
+	lshift(&d, dstlen - srclen);
+	for (uint i = 0; i < dst->len; i++)
+		dst->d[i] = 0;
+	for (ulong i = dstlen - 1; i >= srclen; i--) {
+		if (abscmp(r, d) >= 0) {
+			abssub(&r, d);
+			dst->d[i/CHUNKBITS] |= 1UL << i%CHUNKBITS;
+		}
+		rshift(&d, 1);
+	}
+	rshift(dst, srclen - 1);
+	if (rem)
+		move(rem, &r);
+	else
+		clear(&r);
+	clear(&d);
 }
 
 void read(Number *n, char *s)
@@ -230,9 +326,9 @@ void read(Number *n, char *s)
 		n->neg = 1;
 		s++;
 	}
-	uint perchunk = sizeof(n->d[0]) * 2;
+	uint charbits = CHUNKBITS/4;
 	uint slen = strlen(s);
-	uint last = (slen + perchunk - 1) / perchunk;
+	uint last = (slen + charbits - 1) / charbits;
 	if (last >= n->len)
 		extend(n, last + 1 - n->len);
 	for (uint i = 0; i < slen; i++) {
@@ -246,16 +342,20 @@ void read(Number *n, char *s)
 			printf("error: not a hex digit: %c\n", c);
 			return;
 		}
-		int chunk = i / perchunk;
-		int shift = i % perchunk;
-		n->d[chunk] += digit << (shift * 4);
+		int chunk = i / charbits;
+		int shift = i % charbits;
+		n->d[chunk] += digit << shift*4;
 	}
 	shrink(n);
 }
 
 void print(Number n)
 {
-	if (n.neg && !iszero(n))
+	if (iszero(n)) {
+		printf("0x0\n");
+		return;
+	}
+	if (n.neg)
 		printf("-");
 	printf("0x%lx", n.d[n.len-1]);
 	for (uint i = 1; i < n.len; i++)
@@ -263,45 +363,20 @@ void print(Number n)
 	printf("\n");
 }
 
+/* TODO: tests */
 int main(void)
 {
-	Number a = number(0);
-	read(&a, "123456789abcdefedcba9876543210");
-	lshift(&a, 113);
-	print(a);
-	rshift(&a, 99);
-	print(a);
-	clear(&a);
-	return 0;
-}
-
-int main2(int, char **)
-{
-	Number a = number(0);
-	Number b = number(0);
-	Number z = number(0);
+	Number a = number(4);
+	Number b = number(55);
+	Number c = number(0);
 	read(&a, "123456789abcdefedcba9876543210");
 	read(&b, "912374198327491832749817348971298374981273498719283749817234987129384791234981237498123749875192357192381423");
-	print(a);
-	neg(&a);
-	print(a);
-	for (int i = 0; i < 100000; i++)
-		add(&a, b);
-	print(a);
-	for (int i = 0; i < 100000; i++)
-		sub(&a, b);
-	print(a);
-	sub(&a, a);
-	print(a);
-	sub(&a, z);
-	print(a);
-	add(&a, z);
-	print(a);
-	clear(&a);
-	add(&a, b);
+	divrem(&b, &c, a);
+	print(b);
+	print(c);
 	print(a);
 	clear(&a);
 	clear(&b);
-	clear(&z);
+	clear(&c);
 	return 0;
 }
