@@ -304,7 +304,7 @@ void divrem(Number *dst, Number *rem, Number src)
 	lshift(&d, dstlen - srclen);
 	for (uint i = 0; i < dst->len; i++)
 		dst->d[i] = 0;
-	for (ulong i = dstlen - 1; i >= srclen; i--) {
+	for (ulong i = dstlen - 1; i >= srclen - 1; i--) {
 		if (abscmp(r, d) >= 0) {
 			abssub(&r, d);
 			dst->d[i/CHUNKBITS] |= 1UL << i%CHUNKBITS;
