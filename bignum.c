@@ -14,7 +14,7 @@ typedef struct {
 	uchar neg;
 } Number;
 
-#define CHUNKBITS (sizeof(long)*8)
+#define CHUNKBITS (sizeof(ulong)*8)
 
 Number number(ulong n)
 {
@@ -349,7 +349,31 @@ void read(Number *n, char *s)
 	shrink(n);
 }
 
-void print(Number n)
+void print10(Number n)
+{
+	if (iszero(n)) {
+		printf("0\n");
+		return;
+	}
+	if (n.neg)
+		printf("-");
+	uint len10 = length(n) / 3;
+	char *digits = malloc(len10+1);
+	char *curr = digits + len10;
+	Number d = copy(n);
+	Number r = number(0);
+	Number ten = {1, 1, (ulong[]){10}, 0};
+	for (*curr = '\0', curr--; !iszero(d); curr--) {
+		divrem(&d, &r, ten);
+		*curr = '0' + r.d[0];
+	}
+	printf("%s\n", curr);
+	free(digits);
+	clear(&d);
+	clear(&r);
+}
+
+void print16(Number n)
 {
 	if (iszero(n)) {
 		printf("0x0\n");
@@ -363,18 +387,32 @@ void print(Number n)
 	printf("\n");
 }
 
+void fact(ulong x)
+{
+	Number acc = number(1);
+	while (x > 1) {
+		Number t = {1, 1, (ulong[]){x}, 0};
+		mul(&acc, t);
+		x -= 1;
+	}
+	print10(acc);
+	clear(&acc);
+}
+
 /* TODO: tests */
 int main(void)
 {
 	Number a = number(4);
 	Number b = number(55);
 	Number c = number(0);
+	fact(102);
 	read(&a, "123456789abcdefedcba9876543210");
+	print10(a);
 	read(&b, "912374198327491832749817348971298374981273498719283749817234987129384791234981237498123749875192357192381423");
 	divrem(&b, &c, a);
-	print(b);
-	print(c);
-	print(a);
+	print16(b);
+	print16(c);
+	print16(a);
 	clear(&a);
 	clear(&b);
 	clear(&c);
