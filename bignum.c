@@ -107,7 +107,15 @@ static void flip(Number *n)
 {
 	for (uint i = 0; i < n->len; i++)
 		n->d[i] = ~n->d[i];
-	n->d[0] += 1;
+	int carry = 1;
+	for (uint i = 0; i < n->len && carry; i++) {
+		n->d[i] += carry;
+		carry = !n->d[i];
+	}
+	if (carry) {
+		extend(n, 1);
+		n->d[n->len-1] = 1;
+	}
 }
 
 void abssub(Number *dst, Number src)
