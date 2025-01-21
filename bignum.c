@@ -105,12 +105,10 @@ static void shrink(Number *n)
 
 static void flip(Number *n)
 {
-	for (uint i = 0; i < n->len; i++)
-		n->d[i] = ~n->d[i];
 	int carry = 1;
-	for (uint i = 0; i < n->len && carry; i++) {
-		n->d[i] += carry;
-		carry = !n->d[i];
+	for (uint i = 0; i < n->len; i++) {
+		n->d[i] = ~n->d[i] + carry;
+		carry = carry && !n->d[i];
 	}
 	if (carry) {
 		extend(n, 1);
