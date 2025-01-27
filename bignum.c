@@ -235,7 +235,7 @@ void lshift(Number *n, uint bits)
 	}
 }
 
-ulong length(Number n)
+ulong bitlen(Number n)
 {
 	if (n.len) {
 		for (uint i = CHUNKBITS; i; i--) {
@@ -270,7 +270,7 @@ void mul(Number *dst, Number src)
 	if (srccopy)
 		src = copy(src);
 	zero(dst);
-	for (ulong i = 0; i < length(src); i++) {
+	for (ulong i = 0; i < bitlen(src); i++) {
 		if (src.d[i/CHUNKBITS] & (1UL << i%CHUNKBITS))
 			absadd(dst, tmp);
 		lshift(&tmp, 1);
@@ -295,8 +295,8 @@ void quorem(Number *dst, Number *rem, Number src)
 {
 	if (iszero(src))
 		return; /* should we crash? */
-	ulong dstlen = length(*dst);
-	ulong srclen = length(src);
+	ulong dstlen = bitlen(*dst);
+	ulong srclen = bitlen(src);
 	if (dstlen < srclen) {
 		if (rem)
 			move(rem, dst);
