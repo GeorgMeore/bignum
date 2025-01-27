@@ -16,6 +16,17 @@ typedef struct {
 
 #define CHUNKBITS (sizeof(ulong)*8)
 
+ulong bitlen(Number n)
+{
+	if (n.len) {
+		for (uint i = CHUNKBITS; i; i--) {
+			if (n.d[n.len-1] & (1UL << (i-1)))
+				return (ulong)(n.len - 1)*CHUNKBITS + i;
+		}
+	}
+	return 0;
+}
+
 Number number(ulong n)
 {
 	Number a = {};
@@ -24,6 +35,24 @@ Number number(ulong n)
 	a.d = calloc(a.cap, sizeof(a.d[0]));
 	a.d[0] = n; /* all others are zeroed by calloc */
 	return a;
+}
+
+static void extend(Number *n, uint chunks)
+{
+	n->len += chunks;
+	if (n->len <= n->cap)
+		return;
+	while (n->len > n->cap)
+		n->cap = n->len * 2;
+	n->d = reallocarray(n->d, n->cap, sizeof(n->d[0]));
+	for (uint i = n->len - chunks; i < n->cap; i++)
+		n->d[i] = 0;
+}
+
+static void shrink(Number *n)
+{
+	while (n->len > 1 && !n->d[n->len-1])
+		n->len -= 1;
 }
 
 Number copy(Number n)
@@ -38,12 +67,32 @@ Number copy(Number n)
 	return c;
 }
 
+void move(Number *dst, Number *src)
+{
+	if (dst->d == src->d)
+		return;
+	free(dst->d);
+	*dst = *src;
+	*src = (Number){};
+}
+
+void assign(Number *dst, Number src)
+{
+	if (dst->d == src.d)
+		return;
+	if (dst->len < src.len)
+		extend(dst, dst->len - src.len);
+	for (uint i = 0; i < src.len; i++)
+		dst->d[i] = src.d[i];
+	for (uint i = src.len; i < dst->len; i++)
+		dst->d[i] = 0;
+	dst->len = src.len;
+}
+
 void clear(Number *n)
 {
 	free(n->d);
-	n->cap = 0;
-	n->len = 0;
-	n->d = 0;
+	*n = (Number){};
 }
 
 void negate(Number *n)
@@ -66,18 +115,6 @@ int iszero(Number n)
 	return !n.len || (n.len == 1 && n.d[0] == 0);
 }
 
-static void extend(Number *n, uint chunks)
-{
-	n->len += chunks;
-	if (n->len <= n->cap)
-		return;
-	while (n->len > n->cap)
-		n->cap = n->len * 2;
-	n->d = reallocarray(n->d, n->cap, sizeof(n->d[0]));
-	for (uint i = n->len - chunks; i < n->cap; i++)
-		n->d[i] = 0;
-}
-
 static void absadd(Number *dst, Number src)
 {
 	if (dst->len < src.len)
@@ -95,12 +132,6 @@ static void absadd(Number *dst, Number src)
 		extend(dst, 1);
 		dst->d[dst->len-1] = 1;
 	}
-}
-
-static void shrink(Number *n)
-{
-	while (n->len > 1 && !n->d[n->len-1])
-		n->len -= 1;
 }
 
 static void flip(Number *n)
@@ -235,17 +266,6 @@ void lshift(Number *n, uint bits)
 	}
 }
 
-ulong bitlen(Number n)
-{
-	if (n.len) {
-		for (uint i = CHUNKBITS; i; i--) {
-			if (n.d[n.len-1] & (1UL << (i-1)))
-				return (ulong)(n.len - 1)*CHUNKBITS + i;
-		}
-	}
-	return 0;
-}
-
 void inc(Number *dst, ulong n)
 {
 	Number c = {1, 1, (ulong[]){n}, 0};
@@ -280,17 +300,6 @@ void mul(Number *dst, Number src)
 		clear(&src);
 }
 
-void move(Number *dst, Number *src)
-{
-	if (dst->d == src->d)
-		return;
-	free(dst->d);
-	*dst = *src;
-	src->len = 0;
-	src->cap = 0;
-	src->d = 0;
-}
-
 void quorem(Number *dst, Number *rem, Number src)
 {
 	if (iszero(src))
@@ -307,9 +316,9 @@ void quorem(Number *dst, Number *rem, Number src)
 	Number d = copy(src);
 	Number r = copy(*dst);
 	dst->neg = r.neg = dst->neg ^ src.neg;
-	lshift(&d, dstlen - srclen);
 	for (uint i = 0; i < dst->len; i++)
 		dst->d[i] = 0;
+	lshift(&d, dstlen - srclen);
 	for (ulong i = dstlen - 1; i >= srclen - 1; i--) {
 		if (abscmp(r, d) >= 0) {
 			abssub(&r, d);
