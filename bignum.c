@@ -291,7 +291,7 @@ void move(Number *dst, Number *src)
 	src->d = 0;
 }
 
-void divrem(Number *dst, Number *rem, Number src)
+void quorem(Number *dst, Number *rem, Number src)
 {
 	if (iszero(src))
 		return; /* should we crash? */
@@ -363,15 +363,15 @@ void print10(Number n)
 	}
 	if (n.neg)
 		printf("-");
-	uint len10 = length(n) / 3;
+	uint len10 = (bitlen(n) + 2) / 3; /* round up */
 	char *digits = malloc(len10+1);
 	char *curr = digits + len10;
 	Number d = copy(n);
 	Number r = number(0);
 	Number ten = {1, 1, (ulong[]){10}, 0};
-	for (*curr = '\0', curr--; !iszero(d); curr--) {
-		divrem(&d, &r, ten);
-		*curr = '0' + r.d[0];
+	for (*curr = '\0'; !iszero(d); curr--) {
+		quorem(&d, &r, ten);
+		curr[-1] = '0' + r.d[0];
 	}
 	printf("%s\n", curr);
 	free(digits);
@@ -415,7 +415,7 @@ int main(void)
 	read(&a, "123456789abcdefedcba9876543210");
 	print10(a);
 	read(&b, "912374198327491832749817348971298374981273498719283749817234987129384791234981237498123749875192357192381423");
-	divrem(&b, &c, a);
+	quorem(&b, &c, a);
 	print16(b);
 	print16(c);
 	print16(a);
