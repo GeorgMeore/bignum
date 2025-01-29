@@ -247,10 +247,10 @@ void lshift(Number *n, uint bits)
 	uint move = bits / CHUNKBITS;
 	if (move) {
 		extend(n, move);
-		for (uint i = 0; i < n->len-move; i++) {
-			n->d[n->len-1-i] = n->d[n->len-1-i - move];
-			n->d[n->len-1-i - move] = 0;
-		}
+		for (uint i = n->len; i >= move; i--)
+			n->d[i] = n->d[i-move];
+		for (uint i = 0; i < move; i++)
+			n->d[i] = 0;
 	}
 	uint shift = bits % CHUNKBITS;
 	if (shift) {
