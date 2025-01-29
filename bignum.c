@@ -147,6 +147,7 @@ static void flip(Number *n)
 	}
 }
 
+/* TODO: subtract bigger from smaller */
 void abssub(Number *dst, Number src)
 {
 	if (dst->len < src.len)
@@ -300,10 +301,48 @@ void mul(Number *dst, Number src)
 		clear(&src);
 }
 
+void rem(Number *dst, Number src)
+{
+	assert(!iszero(src));
+	dst->neg ^= src.neg;
+	ulong dstlen = bitlen(*dst);
+	ulong srclen = bitlen(src);
+	if (dstlen > srclen)
+		lshift(&src, dstlen - srclen);
+	for (ulong i = dstlen; i >= srclen; i--) {
+		if (abscmp(*dst, src) >= 0)
+			abssub(dst, src);
+		if (i > srclen)
+			rshift(&src, 1);
+	}
+}
+
+void quo(Number *dst, Number src)
+{
+	assert(!iszero(src));
+	dst->neg ^= src.neg;
+	ulong dstlen = bitlen(*dst);
+	ulong srclen = bitlen(src);
+	if (dstlen > srclen)
+		lshift(&src, dstlen - srclen);
+	extend(dst, 1); /* dst = remainder, chunk, quotient */
+	uint l = dst->len;
+	dst->len -= 1;
+	for (ulong i = dstlen - 1; i >= srclen - 1; i--) {
+		if (abscmp(*dst, src) >= 0) {
+			abssub(dst, src);
+			dst->d[i/CHUNKBITS + 1] |= 1UL << i%CHUNKBITS;
+		}
+		if (i > srclen - 1)
+			rshift(&src, 1);
+	}
+	dst->len = l;
+	rshift(dst, srclen - 1 + CHUNKBITS);
+}
+
 void quorem(Number *dst, Number *rem, Number src)
 {
-	if (iszero(src))
-		return; /* should we crash? */
+	assert (!iszero(src));
 	ulong dstlen = bitlen(*dst);
 	ulong srclen = bitlen(src);
 	if (dstlen < srclen) {
@@ -357,8 +396,8 @@ void read(Number *n, char *s)
 			printf("error: not a hex digit: %c\n", c);
 			return;
 		}
-		int chunk = i / charbits;
-		int shift = i % charbits;
+		uint chunk = i / charbits;
+		uint shift = i % charbits;
 		n->d[chunk] += digit << shift*4;
 	}
 	shrink(n);
