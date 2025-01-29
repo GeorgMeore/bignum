@@ -173,7 +173,7 @@ static int abscmp(Number a, Number b)
 		return 1;
 	if (a.len < b.len)
 		return -1;
-	for (int i = a.len - 1; i >= 0; i--) {
+	for (long i = a.len - 1; i >= 0; i--) {
 		if (a.d[i] > b.d[i])
 			return 1;
 		if (a.d[i] < b.d[i])
@@ -223,10 +223,10 @@ void rshift(Number *n, uint bits)
 		return;
 	}
 	if (drop) {
-		for (uint i = 0; i < n->len-drop; i++) {
+		for (uint i = 0; i < n->len-drop; i++)
 			n->d[i] = n->d[i+drop];
-			n->d[i+drop] = 0;
-		}
+		for (uint i = n->len-drop; i < n->len; i++)
+			n->d[i] = 0;
 	}
 	uint shift = bits % CHUNKBITS;
 	if (shift) {
