@@ -19,7 +19,7 @@ typedef struct {
 ulong bitlen(Number n)
 {
 	if (n.len) {
-		for (uint i = CHUNKBITS; i; i--) {
+		for (uint i = CHUNKBITS; i > 0; i--) {
 			if (n.d[n.len-1] & (1UL << (i-1)))
 				return (ulong)(n.len - 1)*CHUNKBITS + i;
 		}
