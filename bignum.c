@@ -340,36 +340,31 @@ void quo(Number *dst, Number src)
 	rshift(dst, srclen - 1 + CHUNKBITS);
 }
 
+/* TODO: do less copying */
 void quorem(Number *dst, Number *rem, Number src)
 {
+	if (!rem)
+		return quo(dst, src);
 	assert (!iszero(src));
 	ulong dstlen = bitlen(*dst);
 	ulong srclen = bitlen(src);
-	if (dstlen < srclen) {
-		if (rem)
-			move(rem, dst);
-		else
-			zero(dst);
-		return;
-	}
+	if (dstlen < srclen)
+		return move(rem, dst);
 	Number d = copy(src);
 	Number r = copy(*dst);
 	dst->neg = r.neg = dst->neg ^ src.neg;
 	for (uint i = 0; i < dst->len; i++)
 		dst->d[i] = 0;
 	lshift(&d, dstlen - srclen);
-	for (ulong i = dstlen - 1; i >= srclen - 1; i--) {
+	for (ulong i = dstlen - srclen; ~i; i--) {
 		if (abscmp(r, d) >= 0) {
 			abssub(&r, d);
 			dst->d[i/CHUNKBITS] |= 1UL << i%CHUNKBITS;
 		}
 		rshift(&d, 1);
 	}
-	rshift(dst, srclen - 1);
-	if (rem)
-		move(rem, &r);
-	else
-		clear(&r);
+	shrink(dst);
+	move(rem, &r);
 	clear(&d);
 }
 
