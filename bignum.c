@@ -270,13 +270,14 @@ void dec(Number *dst, ulong n)
 
 static void ulmul(ulong x, ulong y, ulong lu[2])
 {
-	ulong a = x & 0xFFFFFFFF, b = x >> 32;
-	ulong c = y & 0xFFFFFFFF, d = y >> 32;
-	ulong t = a*d + c*b;
-	ulong of1 = t < a*d;
-	lu[0] = a*c + (t << 32);
-	ulong of2 = lu[0] < a*c;
-	lu[1] = b*d + (t >> 32) + of2 + (of1 << 32);
+	ulong half = CHUNKBITS/2;
+	ulong xl = x & ((1UL << half) - 1), xu = x >> half;
+	ulong yl = y & ((1UL << half) - 1), yu = y >> half;
+	ulong t = xl*yu + yl*xu;
+	ulong of1 = t < xl*yu;
+	lu[0] = xl*yl + (t << half);
+	ulong of2 = lu[0] < xl*yl;
+	lu[1] = xu*yu + (t >> half) + of2 + (of1 << half);
 }
 
 void square(Number *n)
@@ -294,10 +295,8 @@ void square(Number *n)
 			if (j == j0)
 				s.d[0] = 0; /* without that we get n**2 + n */
 			absadd(&s, tmp);
-			/* NOTE: We could do a shift by 1, but the edge cases are
-			 * kinda tricky to handle, sooo... */
 			if (j != i-j)
-				absadd(&s, tmp);
+				absadd(&s, tmp); /* we could do tmp<<1, but edge cases are tricky */
 		}
 	}
 	shrink(n);
