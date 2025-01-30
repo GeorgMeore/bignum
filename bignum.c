@@ -121,8 +121,9 @@ static void absadd(Number *dst, Number src)
 		extend(dst, src.len - dst->len);
 	int carry = 0;
 	for (uint i = 0; i < src.len; i++) {
-		dst->d[i] += src.d[i] + carry;
-		carry = (carry && !(src.d[i] + carry)) || dst->d[i] < src.d[i] + carry;
+		ulong diff = src.d[i] + carry;
+		dst->d[i] += diff;
+		carry = (carry && !diff) || dst->d[i] < diff;
 	}
 	for (uint i = src.len; i < dst->len && carry; i++) {
 		dst->d[i] += carry;
@@ -134,37 +135,26 @@ static void absadd(Number *dst, Number src)
 	}
 }
 
-static void flip(Number *n)
+static void abssub(Number *dst, Number src, int gt)
 {
-	int carry = 1;
-	for (uint i = 0; i < n->len; i++) {
-		n->d[i] = ~n->d[i] + carry;
-		carry = carry && !n->d[i];
-	}
-	if (carry) {
-		extend(n, 1);
-		n->d[n->len-1] = 1;
-	}
-}
-
-/* TODO: subtract bigger from smaller */
-void abssub(Number *dst, Number src)
-{
-	if (dst->len < src.len)
+	ulong *dgt, *dlt;
+	if (gt) {
+		dgt = dst->d, dlt = src.d;
+	} else {
 		extend(dst, src.len - dst->len);
+		dgt = src.d, dlt = dst->d;
+	}
 	int borrow = 0;
 	for (uint i = 0; i < src.len; i++) {
-		dst->d[i] -= src.d[i] + borrow;
-		borrow = (borrow && !(src.d[i] + borrow)) || dst->d[i] > ~(src.d[i] + borrow);
+		ulong diff = dlt[i] + borrow;
+		dst->d[i] = dgt[i] - diff;
+		borrow = (borrow && !diff) || dst->d[i] > ~diff;
 	}
 	for (uint i = src.len; i < dst->len && borrow; i++) {
 		dst->d[i] -= borrow;
 		borrow = !~dst->d[i];
 	}
-	if (borrow) {
-		negate(dst);
-		flip(dst);
-	}
+	assert(!borrow);
 	shrink(dst);
 }
 
@@ -202,10 +192,14 @@ int cmp(Number a, Number b)
 
 void add(Number *dst, Number src)
 {
-	if (dst->neg == src.neg)
+	if (dst->neg == src.neg) {
 		absadd(dst, src);
-	else
-		abssub(dst, src);
+	} else if (abscmp(*dst, src) > 0) {
+		abssub(dst, src, 1);
+	} else {
+		abssub(dst, src, 0);
+		negate(dst);
+	}
 }
 
 void sub(Number *dst, Number src)
@@ -311,7 +305,7 @@ void rem(Number *dst, Number src)
 		lshift(&src, dstlen - srclen);
 	for (ulong i = dstlen; i >= srclen; i--) {
 		if (abscmp(*dst, src) >= 0)
-			abssub(dst, src);
+			abssub(dst, src, 1);
 		if (i > srclen)
 			rshift(&src, 1);
 	}
@@ -330,7 +324,7 @@ void quo(Number *dst, Number src)
 	dst->len -= 1;
 	for (ulong i = dstlen - 1; i >= srclen - 1; i--) {
 		if (abscmp(*dst, src) >= 0) {
-			abssub(dst, src);
+			abssub(dst, src, 1);
 			dst->d[i/CHUNKBITS + 1] |= 1UL << i%CHUNKBITS;
 		}
 		if (i > srclen - 1)
@@ -358,7 +352,7 @@ void quorem(Number *dst, Number *rem, Number src)
 	lshift(&d, dstlen - srclen);
 	for (ulong i = dstlen - srclen; ~i; i--) {
 		if (abscmp(r, d) >= 0) {
-			abssub(&r, d);
+			abssub(&r, d, 1);
 			dst->d[i/CHUNKBITS] |= 1UL << i%CHUNKBITS;
 		}
 		rshift(&d, 1);
