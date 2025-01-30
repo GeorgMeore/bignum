@@ -2,6 +2,8 @@ typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef unsigned long ulong;
 
+/* TODO: add a "shift" field to be able to store and work
+ * with numbers like n << 1000 more efficiently */
 typedef struct {
 	uint len;
 	uint cap;
