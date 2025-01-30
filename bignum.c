@@ -280,6 +280,7 @@ static void ulmul(ulong x, ulong y, ulong lu[2])
 	lu[1] = xu*yu + (t >> half) + of2 + (of1 << half);
 }
 
+/* TODO: measure the performance against mul */
 void square(Number *n)
 {
 	if (iszero(*n))
