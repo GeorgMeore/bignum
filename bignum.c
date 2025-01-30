@@ -11,6 +11,7 @@
 ulong bitlen(Number n)
 {
 	if (n.len) {
+		assert(n.d[n.len-1]);
 		for (uint i = CHUNKBITS; i > 0; i--) {
 			if (n.d[n.len-1] & (1UL << (i-1)))
 				return (ulong)(n.len - 1)*CHUNKBITS + i;
