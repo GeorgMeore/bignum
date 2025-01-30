@@ -25,6 +25,7 @@ void   rshift(Number *n, uint bits);
 void   lshift(Number *n, uint bits);
 void   inc(Number *dst, ulong n);
 void   dec(Number *dst, ulong n);
+void   square(Number *n);
 void   mul(Number *dst, Number src);
 void   rem(Number *dst, Number src);
 void   quo(Number *dst, Number src);

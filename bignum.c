@@ -268,17 +268,49 @@ void dec(Number *dst, ulong n)
 	sub(dst, c);
 }
 
+static void ulmul(ulong x, ulong y, ulong lu[2])
+{
+	ulong a = x & 0xFFFFFFFF, b = x >> 32;
+	ulong c = y & 0xFFFFFFFF, d = y >> 32;
+	ulong t = a*d + c*b;
+	ulong of1 = t < a*d;
+	lu[0] = a*c + (t << 32);
+	ulong of2 = lu[0] < a*c;
+	lu[1] = b*d + (t >> 32) + of2 + (of1 << 32);
+}
+
+void square(Number *n)
+{
+	if (iszero(*n))
+		return;
+	uint l = n->len;
+	extend(n, n->len);
+	Number tmp = {2, 2, (ulong[]){0, 0}, 0};
+	for (long i = n->len-2; i >= 0; i--) {
+		long j0 = i < l ? i : l-1;
+		for (long j = j0; j >= (i + 1)/2; j--) {
+			ulmul(n->d[j], n->d[i-j], tmp.d);
+			Number s = {n->len-i, n->len-i, &n->d[i], 0};
+			if (j == j0)
+				s.d[0] = 0; /* without that we get n**2 + n */
+			absadd(&s, tmp);
+			/* NOTE: We could do a shift by 1, but the edge cases are
+			 * kinda tricky to handle, sooo... */
+			if (j != i-j)
+				absadd(&s, tmp);
+		}
+	}
+	shrink(n);
+}
+
 void mul(Number *dst, Number src)
 {
-	if (iszero(src)) {
-		zero(dst);
-		return;
-	}
+	if (dst->d == src.d)
+		return square(dst);
+	if (iszero(src))
+		return zero(dst);
 	dst->neg = dst->neg ^ src.neg;
 	Number tmp = copy(*dst);
-	uint srccopy = dst->d == src.d;
-	if (srccopy)
-		src = copy(src);
 	zero(dst);
 	for (ulong i = 0; i < bitlen(src); i++) {
 		if (src.d[i/CHUNKBITS] & (1UL << i%CHUNKBITS))
@@ -286,8 +318,6 @@ void mul(Number *dst, Number src)
 		lshift(&tmp, 1);
 	}
 	clear(&tmp);
-	if (srccopy)
-		clear(&src);
 }
 
 void rem(Number *dst, Number src)
