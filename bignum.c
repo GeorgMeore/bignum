@@ -1,18 +1,10 @@
+#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <assert.h>
 
-typedef unsigned char uchar;
-typedef unsigned int uint;
-typedef unsigned long ulong;
+#include "bignum.h"
 
-typedef struct {
-	uint len;
-	uint cap;
-	ulong *d;
-	uchar neg;
-} Number;
 
 #define CHUNKBITS (sizeof(ulong)*8)
 
@@ -27,12 +19,16 @@ ulong bitlen(Number n)
 	return 0;
 }
 
-Number number(ulong n)
+Number number(long n)
 {
 	Number a = {};
 	a.len = 1;
 	a.cap = 16; /* the default initial capacity */
 	a.d = calloc(a.cap, sizeof(a.d[0]));
+	if (n < 0) {
+		a.neg = 1;
+		n = -n;
+	}
 	a.d[0] = n; /* all others are zeroed by calloc */
 	return a;
 }
@@ -102,12 +98,11 @@ void negate(Number *n)
 
 void zero(Number *n)
 {
-	if (n->len) {
-		for (uint i = 0; i < n->len; i++)
-			n->d[i] = 0;
-		n->len = 1;
-	}
-	n->neg = 0;
+	if (!n->len)
+		return; /* We treat cleared numbers as zero */
+	for (uint i = 0; i < n->len; i++)
+		n->d[i] = 0;
+	n->len = 1;
 }
 
 int iszero(Number n)
@@ -368,6 +363,8 @@ void read(Number *n, char *s)
 	if (*s == '-') {
 		n->neg = 1;
 		s++;
+	} else {
+		n->neg = 0;
 	}
 	uint charbits = CHUNKBITS/4;
 	uint slen = strlen(s);
@@ -428,36 +425,4 @@ void print16(Number n)
 	for (uint i = 1; i < n.len; i++)
 		printf("%016lx", n.d[n.len-1-i]);
 	printf("\n");
-}
-
-void fact(ulong x)
-{
-	Number acc = number(1);
-	while (x > 1) {
-		Number t = {1, 1, (ulong[]){x}, 0};
-		mul(&acc, t);
-		x -= 1;
-	}
-	print10(acc);
-	clear(&acc);
-}
-
-/* TODO: tests */
-int main(void)
-{
-	Number a = number(4);
-	Number b = number(55);
-	Number c = number(0);
-	fact(1000);
-	read(&a, "123456789abcdefedcba9876543210");
-	print10(a);
-	read(&b, "912374198327491832749817348971298374981273498719283749817234987129384791234981237498123749875192357192381423");
-	quorem(&b, &c, a);
-	print16(b);
-	print16(c);
-	print16(a);
-	clear(&a);
-	clear(&b);
-	clear(&c);
-	return 0;
 }
