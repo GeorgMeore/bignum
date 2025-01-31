@@ -6,6 +6,8 @@
 #include "bignum.h"
 
 
+#define DIVCEIL(a, b) (((a) + (b) - 1) / (b))
+
 #define CHUNKBITS (sizeof(ulong)*8)
 
 ulong bitlen(Number n)
@@ -388,22 +390,31 @@ void quorem(Number *dst, Number *rem, Number src)
 	clear(&d);
 }
 
-void read(Number *n, char *s)
+static int read10(Number *n, char *s, uint l)
 {
-	zero(n);
-	if (*s == '-') {
-		n->neg = 1;
-		s++;
-	} else {
-		n->neg = 0;
+	if (!n->len)
+		extend(n, 1);
+	Number ten = {1, 1, (ulong[]){10}, 0};
+	for (uint i = 0; i < l; i++) {
+		char c = s[i];
+		if (c < '0' || c > '9') {
+			printf("error: not a decimal digit: %c\n", c);
+			return -1;
+		}
+		mul(n, ten);
+		n->d[0] += c - '0';
 	}
+	return 0;
+}
+
+static int read16(Number *n, char *s, uint l)
+{
 	uint charbits = CHUNKBITS/4;
-	uint slen = strlen(s);
-	uint last = (slen + charbits - 1) / charbits;
+	uint last = DIVCEIL(l, charbits);
 	if (last >= n->len)
 		extend(n, last + 1 - n->len);
-	for (uint i = 0; i < slen; i++) {
-		char c = s[slen-1-i];
+	for (uint i = 0; i < l; i++) {
+		char c = s[l-1-i];
 		ulong digit;
 		if (c >= '0' && c <= '9') {
 			digit = c - '0';
@@ -411,13 +422,31 @@ void read(Number *n, char *s)
 			digit = (c|32) - 'a' + 10;
 		} else {
 			printf("error: not a hex digit: %c\n", c);
-			return;
+			return -1;
 		}
 		uint chunk = i / charbits;
 		uint shift = i % charbits;
 		n->d[chunk] += digit << shift*4;
 	}
 	shrink(n);
+	return 0;
+}
+
+int read(Number *n, char *s)
+{
+	zero(n);
+	if (s[0] == '-') {
+		n->neg = 1;
+		s++;
+	} else {
+		n->neg = 0;
+	}
+	uint l = strlen(s);
+	if (s[0] == '0' && s[1] == 'x') {
+		s += 2;
+		return read16(n, s, l - 2);
+	}
+	return read10(n, s, l);
 }
 
 void print10(Number n)
@@ -428,8 +457,8 @@ void print10(Number n)
 	}
 	if (n.neg)
 		printf("-");
-	uint len10 = (bitlen(n) + 2) / 3; /* round up */
-	char *digits = malloc(len10+1);
+	uint len10 = DIVCEIL(bitlen(n), 3);
+	char *digits = malloc(len10 + 1);
 	char *curr = digits + len10;
 	Number d = copy(n);
 	Number r = number(0);

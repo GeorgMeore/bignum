@@ -32,6 +32,6 @@ void   mul(Number *dst, Number src);
 void   rem(Number *dst, Number src);
 void   quo(Number *dst, Number src);
 void   quorem(Number *dst, Number *rem, Number src);
-void   read(Number *n, char *s);
+int    read(Number *n, char *s);
 void   print10(Number n);
 void   print16(Number n);
