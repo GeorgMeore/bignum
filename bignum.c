@@ -80,7 +80,7 @@ void assign(Number *dst, Number src)
 	if (dst->d == src.d)
 		return;
 	if (dst->len < src.len)
-		extend(dst, dst->len - src.len);
+		extend(dst, src.len - dst->len);
 	for (uint i = 0; i < src.len; i++)
 		dst->d[i] = src.d[i];
 	for (uint i = src.len; i < dst->len; i++)
