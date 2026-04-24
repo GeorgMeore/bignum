@@ -43,7 +43,7 @@ static void extend(Number *n, uint chunks)
 		return;
 	while (n->len > n->cap)
 		n->cap = n->len * 2;
-	n->d = reallocarray(n->d, n->cap, sizeof(n->d[0]));
+	n->d = realloc(n->d, n->cap*sizeof(n->d[0]));
 	for (uint i = n->len - chunks; i < n->cap; i++)
 		n->d[i] = 0;
 }
