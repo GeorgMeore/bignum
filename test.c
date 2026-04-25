@@ -17,6 +17,9 @@ int main(void)
 	Number a = number(0);
 	Number b = number(0);
 	Number c = number(0);
+	/* read10 */
+	read(&a, "18446744073709551619");
+	expect(a, "0x10000000000000003");
 	/* add */
 	read(&a, "0xfffffffffffffffffffffffff");
 	read(&b, "0x1");

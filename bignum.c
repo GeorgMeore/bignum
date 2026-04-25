@@ -396,13 +396,13 @@ static int read10(Number *n, char *s, uint l)
 		extend(n, 1);
 	Number ten = {1, 1, (ulong[]){10}, 0};
 	for (uint i = 0; i < l; i++) {
-		char c = s[i];
-		if (c < '0' || c > '9') {
-			printf("error: not a decimal digit: %c\n", c);
+		if (s[i] < '0' || s[i] > '9') {
+			printf("error: not a decimal digit: %c\n", s[i]);
 			return -1;
 		}
 		mul(n, ten);
-		n->d[0] += c - '0';
+		Number d = {1, 1, (ulong[]){s[i] - '0'}, 0};
+		absadd(n, d);
 	}
 	return 0;
 }
