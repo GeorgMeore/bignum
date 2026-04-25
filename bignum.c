@@ -10,13 +10,13 @@
 
 #define CHUNKBITS (sizeof(ulong)*8)
 
-ulong bitlen(Number n)
+long bitlen(Number n)
 {
 	if (n.len) {
 		assert(n.d[n.len-1]);
 		for (uint i = CHUNKBITS; i > 0; i--) {
 			if (n.d[n.len-1] & (1UL << (i-1)))
-				return (ulong)(n.len - 1)*CHUNKBITS + i;
+				return (long)(n.len - 1)*CHUNKBITS + i;
 		}
 	}
 	return 0;
@@ -315,7 +315,7 @@ void mul(Number *dst, Number src)
 	dst->neg = dst->neg ^ src.neg;
 	Number tmp = copy(*dst);
 	zero(dst);
-	for (ulong i = 0; i < bitlen(src); i++) {
+	for (long i = 0; i < bitlen(src); i++) {
 		if (src.d[i/CHUNKBITS] & (1UL << i%CHUNKBITS))
 			absadd(dst, tmp);
 		lshift(&tmp, 1);
@@ -327,11 +327,11 @@ void rem(Number *dst, Number src)
 {
 	assert(!iszero(src));
 	dst->neg ^= src.neg;
-	ulong dstlen = bitlen(*dst);
-	ulong srclen = bitlen(src);
+	long dstlen = bitlen(*dst);
+	long srclen = bitlen(src);
 	if (dstlen > srclen)
 		lshift(&src, dstlen - srclen);
-	for (ulong i = dstlen; i >= srclen; i--) {
+	for (long i = dstlen; i >= srclen; i--) {
 		if (abscmp(*dst, src) >= 0)
 			abssub(dst, src, 1);
 		if (i > srclen)
@@ -343,19 +343,19 @@ void quo(Number *dst, Number src)
 {
 	assert(!iszero(src));
 	dst->neg ^= src.neg;
-	ulong dstlen = bitlen(*dst);
-	ulong srclen = bitlen(src);
+	long dstlen = bitlen(*dst);
+	long srclen = bitlen(src);
 	if (dstlen > srclen)
 		lshift(&src, dstlen - srclen);
-	extend(dst, 1); /* dst = remainder, chunk, quotient */
+	extend(dst, 1); /* dst = quotient, chunk, remainder */
 	uint l = dst->len;
 	dst->len -= 1;
-	for (ulong i = dstlen - 1; i >= srclen - 1; i--) {
+	for (long i = dstlen; i >= srclen; i--) {
 		if (abscmp(*dst, src) >= 0) {
 			abssub(dst, src, 1);
-			dst->d[i/CHUNKBITS + 1] |= 1UL << i%CHUNKBITS;
+			dst->d[(i-1)/CHUNKBITS + 1] |= 1UL << (i-1)%CHUNKBITS;
 		}
-		if (i > srclen - 1)
+		if (i > srclen)
 			rshift(&src, 1);
 	}
 	dst->len = l;
@@ -368,8 +368,8 @@ void quorem(Number *dst, Number *rem, Number src)
 	if (!rem)
 		return quo(dst, src);
 	assert (!iszero(src));
-	ulong dstlen = bitlen(*dst);
-	ulong srclen = bitlen(src);
+	long dstlen = bitlen(*dst);
+	long srclen = bitlen(src);
 	if (dstlen < srclen)
 		return move(rem, dst);
 	Number d = copy(src);
@@ -378,7 +378,7 @@ void quorem(Number *dst, Number *rem, Number src)
 	for (uint i = 0; i < dst->len; i++)
 		dst->d[i] = 0;
 	lshift(&d, dstlen - srclen);
-	for (ulong i = dstlen - srclen; ~i; i--) {
+	for (long i = dstlen - srclen; i >= 0; i--) {
 		if (abscmp(r, d) >= 0) {
 			abssub(&r, d, 1);
 			dst->d[i/CHUNKBITS] |= 1UL << i%CHUNKBITS;

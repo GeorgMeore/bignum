@@ -1,3 +1,4 @@
+/* NOTE: sizeof(long) > sizeof(int) is assumed */
 typedef unsigned char uchar;
 typedef unsigned int uint;
 typedef unsigned long ulong;
@@ -16,7 +17,7 @@ Number copy(Number n);
 void   move(Number *dst, Number *src);
 void   assign(Number *dst, Number src);
 void   clear(Number *n);
-ulong  bitlen(Number n);
+long   bitlen(Number n);
 void   negate(Number *n);
 void   zero(Number *n);
 int    iszero(Number n);
